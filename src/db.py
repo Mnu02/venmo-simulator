@@ -59,7 +59,13 @@ class DatabaseDriver(object):
         return cursor.lastrowid
     
     def get_user_by_id(self, user_id):
-        pass
+        """
+        Get a user with a specific user_id
+        """
+        cursor = self.conn.execute("SELECT * FROM venmo WHERE id = ?", (user_id,))
+        for row in cursor:
+            return {"id": row[0], "name": row[1], "username": row[2], "balance": row[3]}
+        return None
 
 
 

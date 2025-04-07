@@ -18,12 +18,15 @@ def failure_response(message, code=404):
     return json.dumps({'error': message}), code
 
 # your routes here
-@app.route("/api/users/", method=["GET"])
+@app.route("/api/users/", methods=["GET"])
 def get_all_users():
     return success_response(DB.get_all_users())
 
-@app.route("/api/users", method=["POST"])
+@app.route("/api/users", methods=["POST"])
 def create_a_user():
+    """
+    Create a user
+    """
     body = json.loads(request.data)
 
     if "name" not in body:
@@ -37,11 +40,21 @@ def create_a_user():
 
     user_id = DB.create_a_user(name, username, balance)
     user = DB.get_user_by_id(user_id)
-    
+
     if user is None:
         return failure_response("User not found!", 404)
     return success_response(user, 201)
 
+
+@app.route("/api/user/<int:user_id>/")
+def get_user_by_id(user_id):
+    """
+    Get a user with a specific user_id
+    """
+    user = DB.get_user_by_id(user_id)
+    if user is None:
+        return failure_response("User not found", 404)
+    return success_response(user)
 
 
 if __name__ == "__main__":
