@@ -20,7 +20,24 @@ class DatabaseDriver(object):
     """
 
     def __init__(self):
-        pass
+        self.conn = sqlite3.connect("venmo.db", check_same_thread=False)
+        self.create_venmo_table()
+
+    def create_venmo_table(self):
+        """
+        Create a table with user id, name, username and balance
+        """
+        try:
+            self.conn.execute("""
+                CREATE TABLE venmo (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                username TEXT NOT UNIQUE,
+                balance REAL DEFAULT 0
+                );
+        """)
+        except Exception as e:
+            print(e)
 
 
 # Only <=1 instance of the database driver
