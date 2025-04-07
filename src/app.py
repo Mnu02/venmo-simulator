@@ -16,6 +16,11 @@ def success_response(body, code=200):
 
 def failure_response(message, code=404):
     return json.dumps({'error': message}), code
+def success_response(body, code=200):
+    return json.dumps(body), code
+
+def failure_response(message, code=404):
+    return json.dumps({'error': message}), code
 
 # your routes here
 @app.route("/api/users/", methods=["GET"])
@@ -46,7 +51,7 @@ def create_a_user():
     return success_response(user, 201)
 
 
-@app.route("/api/user/<int:user_id>/")
+@app.route("/api/user/<int:user_id>/", methods=["GET"])
 def get_user_by_id(user_id):
     """
     Get a user with a specific user_id
@@ -55,6 +60,21 @@ def get_user_by_id(user_id):
     if user is None:
         return failure_response("User not found", 404)
     return success_response(user)
+
+
+@app.route("/api/user/<int:user_id>/", methods=["DELETE"])
+def delete_specific_user(user_id):
+    """
+    Delete specific user
+    """
+    user = DB.get_user_by_id(user_id)
+    if user is None:
+        return failure_response("User not found", 404)
+    DB.delete_specific_user(user_id)
+    return success_response(user)
+
+
+
 
 
 if __name__ == "__main__":
