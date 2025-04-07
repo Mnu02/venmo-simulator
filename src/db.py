@@ -39,6 +39,29 @@ class DatabaseDriver(object):
         except Exception as e:
             print(e)
 
+    def get_all_users(self):
+        """
+        Get all users from database. Exclude the user balance
+        """
+        cursor = self.conn.execute("SELECT * FROM venmo;")
+        users = []
+        for row in cursor:
+            users.append({"id": row[0], "name": row[1], "username": row[2]})
+        return users
+    
+    def create_a_user(self, name, username, balance):
+        """
+        Create a user
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT INTO venmo (name, username, balance) values (?, ?, ?);", (name, username, balance))
+        self.conn.commit()
+        return cursor.lastrowid
+    
+    def get_user_by_id(self, user_id):
+        pass
+
+
 
 # Only <=1 instance of the database driver
 # exists within the app at all times
