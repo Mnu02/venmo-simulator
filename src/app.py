@@ -27,7 +27,7 @@ def failure_response(message, code=404):
 def get_all_users():
     return success_response(DB.get_all_users())
 
-@app.route("/api/users", methods=["POST"])
+@app.route("/api/users/", methods=["POST"])
 def create_a_user():
     """
     Create a user
@@ -43,12 +43,14 @@ def create_a_user():
     username = body["username"]
     balance = body["balance"] if "balance" in body else 0
 
-    user_id = DB.create_a_user(name, username, balance)
-    user = DB.get_user_by_id(user_id)
-
-    if user is None:
-        return failure_response("User not found!", 404)
-    return success_response(user, 201)
+    try:
+        user_id = DB.create_a_user(name, username, balance)
+        user = DB.get_user_by_id(user_id)
+        if user is None:
+            return failure_response("User not found!", 404)
+        return success_response(user, 201)
+    except Exception as e:
+        return failure_response(str(e), 500)
 
 
 @app.route("/api/user/<int:user_id>/", methods=["GET"])

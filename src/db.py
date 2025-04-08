@@ -32,7 +32,7 @@ class DatabaseDriver(object):
                 CREATE TABLE venmo (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                username TEXT NOT UNIQUE,
+                username TEXT UNIQUE,
                 balance REAL DEFAULT 0
                 );
         """)
