@@ -76,13 +76,6 @@ class DatabaseDriver(object):
         self.conn.commit()
 
 
-    def send_from_sender_to_receiver(self, sender_id, sender_amt, amount, receiver_id, receiver_amt):
-        """
-        Send money from sender_id to receiver_id
-        """
-        self.conn.execute("UPDATE venmo SET balance = ? WHERE id = ?;", (sender_amt-amount, sender_id))
-        self.conn.execute("UPDATE venmo SET balance = ? WHERE id = ?;", (receiver_amt+amount, receiver_id))
-        self.conn.commit()
         
 
 # Only <=1 instance of the database driver
