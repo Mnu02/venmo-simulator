@@ -22,6 +22,7 @@ class DatabaseDriver(object):
     def __init__(self):
         self.conn = sqlite3.connect("venmo.db", check_same_thread=False)
         self.create_venmo_table()
+        self.create_transactions_table()
 
     def create_venmo_table(self):
         """
@@ -37,7 +38,27 @@ class DatabaseDriver(object):
                 );
         """)
         except Exception as e:
-            print(e)
+            print(e, flush=True)
+
+    def create_transactions_table(self):
+        """
+        Create a table with transaction id, timestamp, sender_id, receiver_id, and 
+        accepted fields
+        """
+        try:
+            self.conn.execute("""
+                CREATE TABLE transactions (
+                    id INTEGER PRIMARY KEY AUTOINREMENT
+                    timestamp TEXT DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now')),
+                    sender_id INTEGER,
+                    receiver_id INTEGER,
+                    accepted BOOLEAN DEFAULT NULL,
+                    FOREIGN KEY (sender_id) REFERENCES venmo(id),
+                    FOREIGN KEY (receiver_id) REFERENCES venmo(id)
+                );
+            """)
+        except Exception as e:
+            print(e, flush=True)
 
     def get_all_users(self):
         """
