@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from datetime import datetime
 
 # From: https://goo.gl/YzypOI
 def singleton(cls):
@@ -47,11 +48,12 @@ class DatabaseDriver(object):
         """
         try:
             self.conn.execute("""
-                CREATE TABLE transactions (
-                    id INTEGER PRIMARY KEY AUTOINREMENT
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     timestamp TEXT DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'now')),
                     sender_id INTEGER,
                     receiver_id INTEGER,
+                    amount REAL,
                     accepted BOOLEAN DEFAULT NULL,
                     FOREIGN KEY (sender_id) REFERENCES venmo(id),
                     FOREIGN KEY (receiver_id) REFERENCES venmo(id)
@@ -84,9 +86,32 @@ class DatabaseDriver(object):
         Get a user with a specific user_id
         """
         cursor = self.conn.execute("SELECT * FROM venmo WHERE id = ?;", (user_id,))
-        for row in cursor:
-            return {"id": row[0], "name": row[1], "username": row[2], "balance": row[3]}
-        return None
+        row = cursor.fetchone()
+
+        if row is None:
+            return None # maybe see if you are handling None values
+            
+        user = {"id": row[0], "name": row[1], "username": row[2], "balance": row[3]}
+
+        cursor = self.conn.execute("""
+            SELECT * FROM transactions 
+            WHERE sender_id = ? OR receiver_id = ?
+            ORDER BY timestamp DESC;
+        """, (user_id, user_id,))
+
+        transactions = []
+        for transaction in cursor.fetchall():
+            transactions.append({
+            "id": transaction[0],
+            "timestamp": transaction[1],
+            "sender_id": transaction[2],
+            "receiver_id": transaction[3],
+            "amount": transaction[4],
+            "accepted": transaction[5]
+            })
+
+        user["transactions"] = transactions
+        return user
 
 
     def delete_specific_user(self, user_id):
@@ -96,8 +121,38 @@ class DatabaseDriver(object):
         self.conn.execute("DELETE FROM venmo WHERE id = ?;", (user_id,))
         self.conn.commit()
 
+    def current_timestamp(self):
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
-        
+    def send_from_sender_to_receiver(self, sender_id, sender_amt, amount, receiver_id, receiver_amt):
+        """
+        Send money from sender_id to receiver_id
+        """
+        self.conn.execute("UPDATE venmo SET balance = ? WHERE id = ?;", (sender_amt-amount, sender_id))
+        self.conn.execute("UPDATE venmo SET balance = ? WHERE id = ?;", (receiver_amt+amount, receiver_id))
+        self.conn.execute("INSERT INTO transactions (timestamp, sender_id, receiver_id, amount, accepted) VALUES (?, ?, ?, ?, ?)", 
+                          (
+                              self.current_timestamp(),
+                              sender_id, 
+                              receiver_id, 
+                              amount,
+                              True,
+                          ))
+        self.conn.commit()
+
+    def add_request_to_transactions(self, sender_id, receiver_id, amount, accepted):
+        """
+        Add a request into the transactions table
+        """
+        self.conn.execute("INSERT INTO transactions (timestamp, sender_id, receiver_id, amount, accepted) VALUES (?, ?, ?, ?, ?)",
+                          (
+                              self.current_timestamp(),
+                              sender_id, 
+                              receiver_id,
+                              amount,
+                              accepted,
+                          ))
+        self.conn.commit()
 
 # Only <=1 instance of the database driver
 # exists within the app at all times
