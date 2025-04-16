@@ -54,6 +54,7 @@ class DatabaseDriver(object):
                     sender_id INTEGER,
                     receiver_id INTEGER,
                     amount REAL,
+                    message TEXT,
                     accepted BOOLEAN DEFAULT NULL,
                     FOREIGN KEY (sender_id) REFERENCES venmo(id),
                     FOREIGN KEY (receiver_id) REFERENCES venmo(id)
@@ -102,12 +103,13 @@ class DatabaseDriver(object):
         transactions = []
         for transaction in cursor.fetchall():
             transactions.append({
-            "id": transaction[0],
-            "timestamp": transaction[1],
-            "sender_id": transaction[2],
-            "receiver_id": transaction[3],
-            "amount": transaction[4],
-            "accepted": transaction[5]
+                "id": transaction[0],
+                "timestamp": transaction[1],
+                "sender_id": transaction[2],
+                "receiver_id": transaction[3],
+                "amount": transaction[4],
+                "message": transaction[5],  
+                "accepted": transaction[6]
             })
 
         user["transactions"] = transactions
@@ -124,35 +126,91 @@ class DatabaseDriver(object):
     def current_timestamp(self):
         return datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
 
-    def send_from_sender_to_receiver(self, sender_id, sender_amt, amount, receiver_id, receiver_amt):
+    def send_from_sender_to_receiver(self, sender_id, sender_amt, amount, receiver_id, receiver_amt, message):
         """
         Send money from sender_id to receiver_id
         """
         self.conn.execute("UPDATE venmo SET balance = ? WHERE id = ?;", (sender_amt-amount, sender_id))
         self.conn.execute("UPDATE venmo SET balance = ? WHERE id = ?;", (receiver_amt+amount, receiver_id))
-        self.conn.execute("INSERT INTO transactions (timestamp, sender_id, receiver_id, amount, accepted) VALUES (?, ?, ?, ?, ?)", 
+        self.conn.execute("INSERT INTO transactions (timestamp, sender_id, receiver_id, amount, message, accepted) VALUES (?, ?, ?, ?, ?, ?)", 
                           (
                               self.current_timestamp(),
                               sender_id, 
                               receiver_id, 
                               amount,
+                              message,
                               True,
                           ))
         self.conn.commit()
 
-    def add_request_to_transactions(self, sender_id, receiver_id, amount, accepted):
+    def add_request_to_transactions(self, sender_id, receiver_id, amount, accepted, message):
         """
         Add a request into the transactions table
         """
-        self.conn.execute("INSERT INTO transactions (timestamp, sender_id, receiver_id, amount, accepted) VALUES (?, ?, ?, ?, ?)",
+        self.conn.execute("INSERT INTO transactions (timestamp, sender_id, receiver_id, amount, message, accepted) VALUES (?, ?, ?, ?, ?, ?)",
                           (
                               self.current_timestamp(),
                               sender_id, 
                               receiver_id,
                               amount,
+                              message,
                               accepted,
                           ))
         self.conn.commit()
+
+    def update_accepted_status(self,id, status):
+        """
+        Update the status of transaction with ID id
+        """
+        self.conn.execute("UPDATE transactions SET accepted = ?, timestamp = ? WHERE id = ?;", (status, self.current_timestamp(), id,))
+        self.conn.commit()
+
+    def get_transaction_by_id(self, id):
+        """
+        Get transaction by id
+        """
+        cursor = self.conn.execute("SELECT * FROM transactions WHERE id = ?;", (id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+
+        # assuming your transactions table schema is:
+        # id, timestamp, sender_id, receiver_id, amount, accepted
+        return {
+            "id": row[0],
+            "timestamp": row[1],
+            "sender_id": row[2],
+            "receiver_id": row[3],
+            "amount": row[4],
+            "message": row[5],
+            "accepted": row[6]
+        }
+    
+    def get_last_transaction_id(self):
+        cursor = self.conn.execute("SELECT last_insert_rowid();")
+        return cursor.fetchone()[0]
+    
+    def accept_transaction_request(self, transaction_id, sender, receiver, amount):
+        """
+        Accepts a pending transaction: updates balances and marks as accepted.
+        """
+        # Update sender and receiver balances
+        self.conn.execute(
+            "UPDATE venmo SET balance = ? WHERE id = ?;",
+            (sender["balance"] - amount, sender["id"])
+        )
+        self.conn.execute(
+            "UPDATE venmo SET balance = ? WHERE id = ?;",
+            (receiver["balance"] + amount, receiver["id"])
+        )
+        
+        # Update the transaction's accepted status
+        self.conn.execute(
+            "UPDATE transactions SET accepted = ?, timestamp = ? WHERE id = ?;",
+            (True, self.current_timestamp(), transaction_id)
+        )
+        self.conn.commit()
+
 
 # Only <=1 instance of the database driver
 # exists within the app at all times

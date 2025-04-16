@@ -16,11 +16,6 @@ def success_response(body, code=200):
 
 def failure_response(message, code=404):
     return json.dumps({'error': message}), code
-def success_response(body, code=200):
-    return json.dumps(body), code
-
-def failure_response(message, code=404):
-    return json.dumps({'error': message}), code
 
 # your routes here
 @app.route("/api/users/", methods=["GET"])
@@ -55,7 +50,7 @@ def create_a_user():
         return failure_response(str(e), 500)
 
 
-@app.route("/api/user/<int:user_id>/", methods=["GET"])
+@app.route("/api/users/<int:user_id>/", methods=["GET"])
 def get_user_by_id(user_id):
     """
     Get a user with a specific user_id
@@ -66,16 +61,22 @@ def get_user_by_id(user_id):
     return success_response(user)
 
 
-@app.route("/api/user/<int:user_id>/", methods=["DELETE"])
+@app.route("/api/users/<int:user_id>/", methods=["DELETE"])
 def delete_specific_user(user_id):
     """
     Delete specific user
     """
-    user = DB.get_user_by_id(user_id)
-    if user is None:
-        return failure_response("User not found", 404)
-    DB.delete_specific_user(user_id)
-    return success_response(user)
+    try:
+        user = DB.get_user_by_id(user_id)
+        if user is None:
+            return failure_response("User not found", 404)
+        
+        deleted_user = user
+        DB.delete_specific_user(user_id)
+        return success_response(deleted_user, 200)
+    except Exception as e:
+        print("❌ Error in DELETE route:", e, flush=True)
+        return failure_response("Internal server error", 500)
 
 def send_money(sender_id, sender, receiver_id, receiver, amount, message, accepted):
     """
@@ -83,11 +84,13 @@ def send_money(sender_id, sender, receiver_id, receiver, amount, message, accept
     """    
     DB.send_from_sender_to_receiver(
         sender_id, sender["balance"],
-        amount, receiver_id, receiver["balance"]
+        amount, receiver_id, receiver["balance"],
+        message 
     )
     
-    res = {"sender_id": sender_id, "receiver_id": receiver_id, "amount": amount, "message": message, "accepted": accepted}
-    return success_response(res, 200)
+    last_id = DB.get_last_transaction_id()
+    txn = DB.get_transaction_by_id(last_id)
+    return success_response(txn, 201)
 
 @app.route("/api/transactions/", methods=["POST"])
 def create_transaction():
@@ -113,9 +116,10 @@ def create_transaction():
         return failure_response("bad request - please put message", 400)
     
     if accepted is None:
-        DB.add_request_to_transactions(sender_id, receiver_id, amount, accepted)
-        res =  {"sender_id": sender_id, "receiver_id": receiver_id, "amount": amount, "message": message, "accepted": accepted}
-        return res
+        DB.add_request_to_transactions(sender_id, receiver_id, amount, accepted, message)
+        last_id = DB.get_last_transaction_id()
+        txn = DB.get_transaction_by_id(last_id)
+        return success_response(txn, 201)
 
     elif accepted == True:
         sender = DB.get_user_by_id(sender_id)
@@ -130,12 +134,41 @@ def create_transaction():
         send_info = send_money(sender_id, sender, receiver_id, receiver, amount, message, accepted)
         return send_info
 
-@app.route("/api/transactions/<int:id>/", methods=[])
+@app.route("/api/transactions/<int:id>/", methods=["POST"])
 def accept_or_deny_request(id):
     """
     Accept or Deny a payment request
     """
-    pass
+    body = json.loads(request.data)
+    if "accepted" not in body:
+        return failure_response("'accepted' field is required", 400)
+    
+    new_status = body["accepted"]
+    transaction = DB.get_transaction_by_id(id)
+
+    if transaction is None:
+        return failure_response("Transaction not found", 404)
+    
+    if transaction["accepted"] is not None:
+        return failure_response("Transaction has already been processed", 403)
+
+    if new_status is False:
+        DB.update_accepted_status(id, False)
+        return success_response(DB.get_transaction_by_id(id), 200)
+
+    # Handle acceptance
+    sender = DB.get_user_by_id(transaction["sender_id"])
+    receiver = DB.get_user_by_id(transaction["receiver_id"])
+    amount = transaction["amount"]
+
+    if sender is None or receiver is None:
+        return failure_response("Sender or receiver not found", 404)
+
+    if sender["balance"] < amount:
+        return failure_response("Sender has insufficient funds", 403)
+
+    DB.accept_transaction_request(id, sender, receiver, amount)
+    return success_response(DB.get_transaction_by_id(id), 200)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
